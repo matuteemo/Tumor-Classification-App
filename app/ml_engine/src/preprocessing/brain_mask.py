@@ -29,7 +29,17 @@ def foreground_mask(gray: np.ndarray) -> np.ndarray:
 
 
 def region_of_interest(mask: np.ndarray, min_fraction: float) -> np.ndarray:
-    """``mask``, or the full image when it covers less than ``min_fraction`` of it."""
-    if mask.mean() < min_fraction:
+    """``mask``, or the full image when it is empty or covers less than ``min_fraction`` of it."""
+    if not mask.any() or mask.mean() < min_fraction:
         return np.ones(mask.shape, dtype=bool)
     return mask
+
+
+def bounding_box(mask: np.ndarray) -> tuple[slice, slice]:
+    """Row and column slices of the smallest window holding every true pixel.
+
+    ``mask`` must not be empty.
+    """
+    rows = np.flatnonzero(mask.any(axis=1))
+    cols = np.flatnonzero(mask.any(axis=0))
+    return slice(int(rows[0]), int(rows[-1]) + 1), slice(int(cols[0]), int(cols[-1]) + 1)

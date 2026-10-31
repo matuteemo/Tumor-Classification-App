@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from src.preprocessing.brain_mask import bounding_box
+
 
 def crop_to_mask(
     image: np.ndarray, mask: np.ndarray, min_pixels: int
@@ -11,9 +13,7 @@ def crop_to_mask(
     """Crop image and mask to the mask bounding box, or None if it has too few pixels."""
     if int(mask.sum()) < min_pixels:
         return None
-    rows = np.flatnonzero(mask.any(axis=1))
-    cols = np.flatnonzero(mask.any(axis=0))
-    window = (slice(rows[0], rows[-1] + 1), slice(cols[0], cols[-1] + 1))
+    window = bounding_box(mask)
     return image[window], mask[window]
 
 

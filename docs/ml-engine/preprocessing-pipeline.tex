@@ -224,8 +224,8 @@ Each block has one purpose, a defined input and output, and testable rules.
 \subsection*{B6. Geometry \hfill \board{166}}
 \begin{itemize}
   \item \textbf{Input:} image and mask. \textbf{Output:} $224\times224$ image.
-  \item \textbf{Rule:} crop to the bounding box of the mask plus a small margin, pad to a square with black, resize (\texttt{INTER\_AREA} to shrink, \texttt{INTER\_LINEAR} to enlarge). The aspect ratio of the crop is preserved.
-  \item \textbf{Tools:} OpenCV. \textbf{Cost:} very low.
+  \item \textbf{Rule:} a square centered on the bounding box of the B5 region (after its fallback), its side the longer side of the box plus \texttt{crop\_margin} (default 0.05) of that side at each end; parts outside the image are black. This is the crop to the box plus a margin, padded to a square, with the margin kept even where the head touches the border (71--87\% of Training images per class). Pixels outside the mask inside the square are kept. Resize to 224 (\texttt{INTER\_AREA} to shrink, \texttt{INTER\_LINEAR} to enlarge). The aspect ratio of the crop is preserved. Decision D19.
+  \item \textbf{Tools:} OpenCV, NumPy (\texttt{preprocessing/geometry.py}). \textbf{Cost:} very low.
   \item \textbf{Evidence:} cropping is common practice \cite{r5}, \cite{r8}. The square padding fixes the class-dependent distortion measured in section~\ref{sec:data}.
 \end{itemize}
 
@@ -325,10 +325,10 @@ Augmentation of validation or test data & Not allowed: it leaks \cite{r4} \\
 \begin{itemize}
   \item \textbf{No patient IDs.} \texttt{group\_id} is a proxy. Distant slices of one patient can still fall in different groups, so metrics can be optimistic \cite{r3}.
   \item \textbf{B4 is not fitted per fold.} Thresholds use the whole purged Training split, so validation rows of the CV take part in a reject-only filter whose thresholds sit below every Training image. With today's values it rejects none, and Testing is not involved. Accepted to keep the pipeline simple.
-  \item \textbf{Resolution shortcut remains.} B6 removes the aspect-ratio cue, but not the differences in source resolution and compression. B10 measures what is left; only an external dataset can rule it out.
-  \item \textbf{Feature cache invalidation.} The cache key is built from the configuration. \board{166} and \board{167} must add configuration fields (such as the crop margin and the transform parameters) so that new code never reuses stale features.
+  \item \textbf{Resolution shortcut remains.} B6 removes the aspect-ratio cue, but not the differences in source resolution and compression: the median no\_tumor head is 250~px against 441--495~px for tumor classes, and 15.8\% of no\_tumor crops are enlarged against at most 1.1\% per tumor class (D19). B10 measures what is left; only an external dataset can rule it out.
+  \item \textbf{Feature cache invalidation.} The cache key is built from the configuration. \board{166} added \texttt{min\_mask\_fraction} and \texttt{crop\_margin}; \board{167} must add the transform parameters so that new code never reuses stale features.
   \item \textbf{\texttt{skull\_stripped} in the contract.} \texttt{QualityMetrics.skull\_stripped} (\board{107}) stays in the contract and is always \texttt{false} (D18). Removing it is a backend and frontend API change left for its own issue.
-  \item \textbf{Thresholds chosen by us:} the 0.70 shortcut warning (B10), $k=1$ augmented copy (B7) and the crop margin (B6) have no external source.
+  \item \textbf{Thresholds chosen by us:} the 0.70 shortcut warning (B10), $k=1$ augmented copy (B7) and the crop margin \texttt{crop\_margin} $=0.05$ (B6) have no external source.
 \end{itemize}
 
 %--------------------------------------------------------------------
@@ -344,7 +344,7 @@ B2  & \board{165} & \texttt{training/dataset.py} & Done \\
 B3  & \board{108} & \texttt{preprocessing/loading.py} & Done \\
 B4  & \board{109}, \board{165}, \board{175} & \texttt{preprocessing/quality.py}, \texttt{training/thresholds.py} & Done: metrics redefined, Training-only calibration applied (decision D17) \\
 B5  & \board{166} & \texttt{preprocessing/brain\_mask.py} & Done: half-Otsu mask shared with B4, full-image fallback under 5\% coverage, skull stripping removed (decision D18) \\
-B6  & \board{166} & \texttt{preprocessing/prepare.py} & To do \\
+B6  & \board{166} & \texttt{preprocessing/geometry.py}, \texttt{preprocessing/prepare.py} & Done: square centered on the B5 region, 5\% margin, black beyond the border, resize to 224 (decision D19) \\
 B7  & \board{167} & \texttt{training/} (new) & To do \\
 B8  & \board{166}, \board{111} & \texttt{preprocessing/prepare.py}, \texttt{deep\_learning/} & Mostly done \\
 B9  & \board{112} & \texttt{training/} & Grouped CV done, balanced accuracy to do \\

@@ -102,9 +102,12 @@ def test_a_manifest_missing_a_section_is_unavailable(copy: Path) -> None:
 def test_serving_follows_the_manifest_and_not_the_defaults(copy: Path) -> None:
     manifest = json.loads((copy / MANIFEST_FILE).read_text())
     manifest["preprocessing"]["min_mask_fraction"] = 0.2
+    manifest["preprocessing"]["crop_margin"] = 0.1
     (copy / MANIFEST_FILE).write_text(json.dumps(manifest))
 
-    assert load_artifact(copy).preprocessing.min_mask_fraction == 0.2
+    preprocessing = load_artifact(copy).preprocessing
+    assert preprocessing.min_mask_fraction == 0.2
+    assert preprocessing.crop_margin == 0.1
 
 
 def test_a_skull_stripping_setting_is_refused(copy: Path) -> None:
@@ -126,6 +129,24 @@ def test_a_missing_mask_fraction_is_refused(copy: Path) -> None:
     with pytest.raises(
         ModelUnavailableError, match=r"missing: \['min_mask_fraction'\]"
     ):
+        load_artifact(copy)
+
+
+def test_a_missing_crop_margin_is_refused(copy: Path) -> None:
+    manifest = json.loads((copy / MANIFEST_FILE).read_text())
+    del manifest["preprocessing"]["crop_margin"]
+    (copy / MANIFEST_FILE).write_text(json.dumps(manifest))
+
+    with pytest.raises(ModelUnavailableError, match=r"missing: \['crop_margin'\]"):
+        load_artifact(copy)
+
+
+def test_a_negative_crop_margin_is_refused(copy: Path) -> None:
+    manifest = json.loads((copy / MANIFEST_FILE).read_text())
+    manifest["preprocessing"]["crop_margin"] = -0.5
+    (copy / MANIFEST_FILE).write_text(json.dumps(manifest))
+
+    with pytest.raises(ModelUnavailableError, match="crop_margin"):
         load_artifact(copy)
 
 

@@ -32,6 +32,7 @@ def test_the_manifest_records_how_the_model_was_trained(result: TrainingResult) 
     assert manifest["classifier"] in candidate_classifiers()
     assert manifest["calibration"]["method"] == "sigmoid"
     assert manifest["preprocessing"]["cnn_size"] == 224
+    assert manifest["preprocessing"]["crop_margin"] == 0.05
     assert manifest["quality_thresholds"] == {
         "min_snr": 2.74,
         "min_entropy": 3.2,

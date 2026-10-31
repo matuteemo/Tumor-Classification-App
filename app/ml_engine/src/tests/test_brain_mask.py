@@ -1,6 +1,6 @@
 import numpy as np
 
-from src.preprocessing.brain_mask import foreground_mask, region_of_interest
+from src.preprocessing.brain_mask import bounding_box, foreground_mask, region_of_interest
 from src.tests.synthetic import head_phantom
 
 
@@ -66,3 +66,14 @@ def test_tiny_bright_spot_falls_back_to_the_full_image() -> None:
 
     assert mask.mean() < 0.05
     assert region.all() and region.dtype == bool
+
+
+def test_empty_mask_falls_back_even_with_a_zero_fraction() -> None:
+    assert region_of_interest(np.zeros((8, 8), dtype=bool), 0.0).all()
+
+
+def test_bounding_box_is_the_smallest_window_with_every_true_pixel() -> None:
+    mask = np.zeros((20, 30), dtype=bool)
+    mask[5, 8] = mask[9, 19] = True
+
+    assert bounding_box(mask) == (slice(5, 10), slice(8, 20))

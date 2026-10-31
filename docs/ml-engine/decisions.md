@@ -245,6 +245,27 @@ The repository is public for the hackathon evaluation, and the artifact publishe
 - **`skull_stripped` kept, always `false`.** `QualityMetrics.skull_stripped` stays so the backend API does not change. The clinical summary no longer shows a skull-stripping row. Removing the field is an API change left for its own issue.
 - **Artifact compatibility.** `load_artifact` refuses a manifest whose preprocessing, quality-threshold or radiomics keys differ from `PreprocessingConfig`, `QualityThresholds` or `RadiomicsConfig`, naming the missing and unexpected keys (`ModelUnavailableError`, 503). Without it a manifest lacking a setting (such as `min_mask_fraction` or `min_entropy`) would be served with the engine default. Artifacts trained before AB-166 must be retrained; none was published.
 
+## D19. CNN image as a square centered on the brain mask (AB-166)
+
+`src/preprocessing/{geometry,prepare}.py`. Pipeline block B6. OpenSpec change `image-geometry`.
+
+- **Rule.** The CNN image is a square centered on the bounding box of the B5 region of interest (after its fallback). Its side is the longer side of the box plus `crop_margin * longer` pixels at each end, rounded half up. What falls outside the loaded image is black (0). The square is resized to `cnn_size` (`INTER_AREA` to shrink, `INTER_LINEAR` to enlarge), then B8 normalizes it. The aspect ratio of the head is kept (G6).
+- **Centered square instead of crop, clip, then pad.** Read literally, the pipeline rule ("crop to the box plus a margin, pad to a square") clips the margin at the image border, and that happens for most images (table below), so the head's position and scale in the 224 image would depend on where it sits in the frame. The centered square gives the same result when nothing is clipped, and a uniform margin otherwise: the head's longer side always maps to about `224 / 1.1 = 204` pixels.
+- **Margin 0.05, a fraction.** `PreprocessingConfig.crop_margin = 0.05` of the box's longer side. A fraction, not pixels, because the head's size in source pixels differs by class (below): a pixel margin would be a relative size cue of its own. The value has no external source. Being a config field, it is in the feature cache fingerprint and the artifact manifest, whose strict check refuses older manifests.
+- **Unmasked crop.** The square is cut from the loaded image: pixels outside the mask but inside the square keep their values (no skull stripping, D18; the half-Otsu mask can miss the darkest brain edge). Radiomics keeps the loaded image at original resolution and is not affected.
+- **Other croppers untouched.** `preprocessing/cropping.crop_to_foreground` feeds the B1 deduplication hashes and `classical/roi.crop_to_mask` crops radiomics windows; changing either would change their outputs, so B6 has its own two-line bounding box.
+- **Check on real data** (purged Training split, 1,830 images, manifest `dedup_20261028T234450903626Z`, 2026-10-31, `ml-engine-test` Docker image):
+
+  | Class | n | 224x224 | B5 fallbacks | Square crosses the border | Head longer side px (p5 / median / p95) | Square enlarged (< 224 px) |
+  |---|---|---|---|---|---|---|
+  | glioma | 850 | all | 0 | 71.2% | 360 / 444 / 495 | 0.0% |
+  | meningioma | 446 | all | 0 | 76.9% | 300 / 441 / 493 | 0.7% |
+  | no_tumor | 260 | all | 0 | 78.5% | 183 / 250 / 708 | 15.8% |
+  | pituitary | 274 | all | 0 | 87.2% | 384 / 495 / 512 | 1.1% |
+
+  No image raised. Once cropped to the mask, the head's width-to-height ratio is about the same in every class (median 0.85-0.90, planning measurement), while 69.6% of no_tumor source frames are not square against 0-5.4% per tumor class. Status: **Verified** that B6 removes the frame-shape difference; the margin is our choice.
+- **Residual resolution cue (input for B10).** no_tumor heads are about half the source size of tumor heads, and 15.8% of no_tumor squares are enlarged against at most 1.1% per tumor class, so no_tumor CNN images are more often interpolated up (smoother). B6 does not remove this; B10 (#168) measures it with the metadata baseline and the notumor recall by source size.
+
 ## GMLP principles checklist
 
 The ten FDA, Health Canada and MHRA Good Machine Learning Practice guiding principles, with where the project stands. This is a design aid, not a compliance claim: the project is not seeking regulatory clearance and must not be presented as compliant.

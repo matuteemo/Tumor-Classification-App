@@ -164,8 +164,8 @@ Each block has one purpose, a defined input and output, and testable rules.
 ### B6. Geometry
 
 - **Input:** image and mask. **Output:** 224x224 image.
-- **Rule:** crop to the bounding box of the mask plus a small margin, pad to a square with black, resize (`INTER_AREA` to shrink, `INTER_LINEAR` to enlarge). The aspect ratio of the crop is preserved.
-- **Tools:** OpenCV. **Cost:** very low.
+- **Rule:** a square centered on the bounding box of the B5 region (after its fallback), its side the longer side of the box plus `crop_margin` (default 0.05) of that side at each end; parts outside the image are black. This is the crop to the box plus a margin, padded to a square, with the margin kept even where the head touches the border (71-87% of Training images per class). Pixels outside the mask inside the square are kept. Resize to 224 (`INTER_AREA` to shrink, `INTER_LINEAR` to enlarge). The aspect ratio of the crop is preserved. Decision D19.
+- **Tools:** OpenCV, NumPy (`preprocessing/geometry.py`). **Cost:** very low.
 - **Evidence:** cropping is common practice [5], [8]. The square padding fixes the class-dependent distortion measured in section 2. **Boards:** #166.
 
 ### B7. Train-only augmentation
@@ -246,10 +246,10 @@ Each guarantee is a unit test or a report entry.
 
 - **No patient IDs.** `group_id` is a proxy. Distant slices of one patient can still fall in different groups, so metrics can be optimistic [3].
 - **B4 is not fitted per fold.** Thresholds use the whole purged Training split, so validation rows of the CV take part in a reject-only filter whose thresholds sit below every Training image. With today's values it rejects none, and Testing is not involved. Accepted to keep the pipeline simple.
-- **Resolution shortcut remains.** B6 removes the aspect-ratio cue, but not the differences in source resolution and compression. B10 measures what is left; only an external dataset can rule it out.
-- **Feature cache invalidation.** The cache key is built from the configuration. #166 and #167 must add configuration fields (such as the crop margin and the transform parameters) so that new code never reuses stale features.
+- **Resolution shortcut remains.** B6 removes the aspect-ratio cue, but not the differences in source resolution and compression: the median no_tumor head is 250 px against 441-495 px for tumor classes, and 15.8% of no_tumor crops are enlarged against at most 1.1% per tumor class (D19). B10 measures what is left; only an external dataset can rule it out.
+- **Feature cache invalidation.** The cache key is built from the configuration. #166 added `min_mask_fraction` and `crop_margin`; #167 must add the transform parameters so that new code never reuses stale features.
 - **`skull_stripped` in the contract.** `QualityMetrics.skull_stripped` (#107) stays in the contract and is always `false` (D18). Removing it is a backend and frontend API change left for its own issue.
-- **Thresholds chosen by us:** the 0.70 shortcut warning (B10), k = 1 augmented copy (B7) and the crop margin (B6) have no external source.
+- **Thresholds chosen by us:** the 0.70 shortcut warning (B10), k = 1 augmented copy (B7) and the crop margin `crop_margin = 0.05` (B6) have no external source.
 
 ---
 
@@ -262,7 +262,7 @@ Each guarantee is a unit test or a report entry.
 | B3 | #108 | `preprocessing/loading.py` | Done |
 | B4 | #109, #165, #175 | `preprocessing/quality.py`, `training/thresholds.py` | Done: metrics redefined, Training-only calibration applied (decision D17) |
 | B5 | #166 | `preprocessing/brain_mask.py` | Done: half-Otsu mask shared with B4, full-image fallback under 5% coverage, skull stripping removed (decision D18) |
-| B6 | #166 | `preprocessing/prepare.py` | To do |
+| B6 | #166 | `preprocessing/geometry.py`, `preprocessing/prepare.py` | Done: square centered on the B5 region, 5% margin, black beyond the border, resize to 224 (decision D19) |
 | B7 | #167 | `training/` (new) | To do |
 | B8 | #166, #111 | `preprocessing/prepare.py`, `deep_learning/` | Mostly done |
 | B9 | #112 | `training/folds.py`, `training/` | Done on synthetic data: folds assigned once and shared, `folds.csv`, balanced accuracy (decision D16). Real-data run to do |
